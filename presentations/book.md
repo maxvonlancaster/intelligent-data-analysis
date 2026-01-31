@@ -234,7 +234,7 @@ $\{x^{(1)},x^{(2)},…,x^{(m)}\}$
 
 Якщо ваші дані є одновимірними категоріальними, єдиним реальним варіантом для їх візуалізації є використання стовпчастої діаграми. Зверніть увагу, що, виходячи з нашого припущення про те, що порядок точок даних у нашому наборі даних не має значення, єдиною значущою інформацією, якщо ми маємо набір даних типу
 
-$\{cat,dog,dog,rabbit,cat,…\}$
+$\{student,teacher,student,professor,teacher,student,…\}$
 
 буде кількість повторень кожного елемента. Таким чином, ми можемо ефективно узагальнити дані, включивши кількість повторень кожного значення даних (це легко зробити за допомогою класу `collections.Counter`).
 
@@ -243,8 +243,9 @@ $\{cat,dog,dog,rabbit,cat,…\}$
 ```
 import collections
 import matplotlib.pyplot as plt
+import numpy as np
 
-data = np.random.permutation(np.array(["dog"]*10 + ["cat"]*7 + ["rabbit"]*3))
+data = np.random.permutation(np.array(["student"]*15 + ["teacher"]*7 + ["professor"]*3))
 # print(data)
 counts = collections.Counter(data)
 plt.bar(range(len(counts)), list(counts.values()), tick_label=list(counts.keys()))
@@ -263,11 +264,11 @@ plt.bar(range(len(counts)), list(counts.values()), tick_label=list(counts.keys()
 Ось приклад того, як побудувати кругову діаграму:
 
 ```
-data = {"strongly disagree": 5,
-        "slightly disagree": 3,
-        "neutral": 8,
-        "slightly agree": 12,
-        "strongly agree": 9}
+data = {"strongly disagree": 3,
+        "disagree": 8,
+        "neutral": 12,
+        "agree": 11,
+        "strongly agree": 4}
 
 plt.pie(data.values(), labels=data.keys(), autopct='%1.1f%%')
 plt.axis('equal')
@@ -281,10 +282,14 @@ plt.axis('equal')
 
 ```
 np.random.seed(0)
-data = np.concatenate([30 + 4*np.random.randn(10000),
-                       18 + 2*np.random.randn(7000),
-                       12 + 3*np.random.randn(30000)])
+data = np.concatenate([30 + 4*np.random.randn(5000),
+                       22 + 2*np.random.randn(7000),
+                       12 + 3*np.random.randn(3000)])
 plt.hist(data, bins=50)
+
+
+# data = np.concatenate([10 + 5*np.random.randn(10000)])
+# plt.hist(data, bins=50);
 ```
 
 ![histogram](./img/103-3.png)
@@ -298,7 +303,7 @@ plt.hist(data, bins=50)
 
 ```
 x = np.random.randn(1000)
-y = 0.4*x**2 + x + 0.7*np.random.randn(1000)
+y = 0.8*x**3 + x + 1.5*np.random.randn(1000)
 plt.scatter(x,y,s=1)
 ```
 
@@ -311,7 +316,7 @@ plt.scatter(x,y,s=1)
 
 ```
 x = np.random.randn(10000)
-y = 0.4*x**2 + x + 0.7*np.random.randn(10000)
+y = 0.8*x**3 + x + 1.5*np.random.randn(10000)
 #plt.scatter(x,y,s=10)
 
 plt.hist2d(x,y,bins=100);
@@ -339,16 +344,16 @@ plt.plot(x,y)
 
 **Коробкова (Box and whiskers) і скрипкові діаграми (Violin plots) — категоріальні x числові**
 
-Розглянемо простий приклад, де (тільки з вигаданими даними) ми будуємо графік типу домашніх тварин у порівнянні з вагою.
+Розглянемо простий приклад, де (тільки з вигаданими даними) ми будуємо графік учасників навчального процесу та їхній вік.
 
 ```
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.linalg as la
 
-data= {"dog": 8 + 2*np.random.randn(1000),
-       "cat": 4 + 1*np.random.randn(900),
-       "rabbit": 1 + 0.4*np.random.randn(300)}
+data= {"student": 22 + 1.4*np.random.randn(1000),
+       "teacher": 37 + 2.5*np.random.randn(900),
+       "professor": 65 + 5.5*np.random.randn(300)}
 plt.scatter(np.concatenate([i*np.ones(len(x)) for i,x in enumerate(data.values())]),
             np.concatenate(list(data.values())))
 plt.xticks(range(len(data)), data.keys());
@@ -380,15 +385,15 @@ plt.xticks(range(1,len(data)+1), data.keys())
 
 **Теплова карта (Heatmap) та бульбашкові діаграми (Bubble plots) — категоріальні x категоріальні**
 
-Коли обидва виміри наших 2D-даних є категоріальними, ми маємо ще менше інформації для використання. Знову ж таки, метою буде надання певної інформації про загальну кількість усіх можливих комбінацій між двома наборами даних. Наприклад, розглянемо вигаданий набір даних про тип домашніх тварин та тип будинку:
+Коли обидва виміри наших 2D-даних є категоріальними, ми маємо ще менше інформації для використання. Знову ж таки, метою буде надання певної інформації про загальну кількість усіх можливих комбінацій між двома наборами даних. Наприклад, розглянемо вигаданий набір даних про учасників навчального процесу та їхній улюблений спосіб навчання
 
 ```
-types = np.array([('dog', 'house'), ('dog', 'appt'), 
-                  ('cat', 'house'), ('cat', 'appt'), 
-                  ('rabbit', 'house'), ('rabbit', 'appt')])
+types = np.array([('student', 'offline'), ('student', 'remote'), 
+                  ('teacher', 'offline'), ('teacher', 'remote'), 
+                  ('professor', 'offline'), ('professor', 'remote')])
 data = types[np.random.choice(range(6), 2000, p=[0.4, 0.1, 0.12, 0.18, 0.05, 0.15]),:]
 
-#print(data[100:])
+# print(data[100:])
 
 label_x, x = np.unique(data[:,0], return_inverse=True)
 label_y, y = np.unique(data[:,1], return_inverse=True)
