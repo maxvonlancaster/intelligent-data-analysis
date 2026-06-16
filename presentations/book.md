@@ -483,6 +483,215 @@ plt.scatter(x,y,c=z)
 
 ## 6. Обробка Природної Мови (Natural Language Processing, NLP)
 
+Велика кількість даних у багатьох реальних наборах даних представлена у вигляді так званого вільного тексту (free text). Це є, наприклад, коментарі користувачів, телеметрія програмних додатків, будь-які «неструктуровані» поля, та багато чого іншого.
+
+Обчислювальна обробка природної мови полягає в тому, що ми пишемо комп'ютерні програми, які можуть розуміти природну мову. Обробка природної мови (NLP) займається тим, як перетворити текст — часто нечіткий і непідготовлений — у форму, зручну для аналізу та моделювання. В цьому розділі ми спробуємо отримати деяку значущу інформацію з неструктурованих текстових даних.
+
+Першим кроком до роботи з такими даними зазвичай стає підготовка тексту: приведення символів до одного регістру, видалення розділових знаків і зайвих символів, очищення чисел і зведення виробленого шуму у більш стандартизований вигляд.
+
+Приклад очищення тексту (clean_text):
+```python
+import re
+import string
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import nltk
+
+# Завантаження ресурсів NLTK (виконується один раз)
+nltk.download('stopwords')
+nltk.download('punkt')
+
+def clean_text(text):
+        # Перевести в нижній регістр
+        text = text.lower()
+
+        # Видалити розділові знаки
+        text = text.translate(str.maketrans('', '', string.punctuation))
+
+        # Видалити числа
+        text = re.sub(r'\d+', '', text)
+
+        # Видалити спеціальні символи (залишаємо лише англійські літери та пробіли)
+        text = re.sub(r'[^a-z\s]', '', text)
+
+        # Видалити стоп-слова
+        stop_words = set(stopwords.words('english'))
+        text = ' '.join(word for word in word_tokenize(text) if word not in stop_words)
+
+        return text
+
+sample_text = "Hello! This is an example text with numbers 123 and punctuation!!!"
+cleaned_text = clean_text(sample_text)
+print(cleaned_text)  # очікуваний вивід: hello example text numbers
+```
+
+Після базового очищення йде токенізація — розбиття тексту на слова або речення, що дозволяє оперувати окремими «будівельними блоками» змісту. Далі часто застосовують стемінг або лематизацію: стемінг обрізає закінчення й повертає корінь слова, іноді утворюючи несловникові форми, тоді як лематизація намагається відновити словникову форму з урахуванням контексту. Нормалізація може також включати виправлення орфографії, розгортання абревіатур і узгодження синонімів — усе задля того, щоб одна й та сама ідея не розпадалася на багато еквівалентних представлень.
+
+Токенізація (word/sentence tokenization):
+```python
+from nltk.tokenize import word_tokenize, sent_tokenize
+
+def tokenize_text(text):
+        words = word_tokenize(text)
+        sentences = sent_tokenize(text)
+        return words, sentences
+
+sample_text = "Natural Language Processing (NLP) is exciting! It enables computers to understand human language."
+words, sentences = tokenize_text(sample_text)
+print('Words:', words)
+print('Sentences:', sentences)
+```
+
+Стемінг та лематизація:
+```python
+from nltk.stem import PorterStemmer, WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+import nltk
+
+# Завантаження словника для лематизації
+nltk.download('wordnet')
+
+def apply_stemming(text):
+        stemmer = PorterStemmer()
+        words = word_tokenize(text)
+        stemmed_words = [stemmer.stem(word) for word in words]
+        return stemmed_words
+
+def apply_lemmatization(text):
+        lemmatizer = WordNetLemmatizer()
+        words = word_tokenize(text)
+        lemmatized_words = [lemmatizer.lemmatize(word) for word in words]
+        return lemmatized_words
+
+sample_text = "The children are playing with their toys."
+print('Stemmed:', apply_stemming(sample_text))
+print('Lemmatized:', apply_lemmatization(sample_text))
+```
+
+Нормалізація (спрощені приклади: виправлення орфографії, абревіатури):
+```python
+from nltk.tokenize import word_tokenize
+from autocorrect import Speller
+import nltk
+
+nltk.download('punkt')
+
+def normalize_text(text):
+        spell = Speller(lang='en')
+        normalization_dict = {
+                "u": "you",
+                "ur": "your",
+                "r": "are",
+                "pls": "please",
+                "thx": "thanks"
+        }
+        words = word_tokenize(text.lower())
+        normalized_words = [normalization_dict.get(word, spell(word)) for word in words]
+        normalized_text = ' '.join(normalized_words)
+        normalized_text = normalized_text.replace('!', '').replace('.', '').strip()
+        return normalized_text
+
+sample_text = "U r the best! Pls help me with this assignment. Thx!"
+print(normalize_text(sample_text))
+```
+
+Після підготовки тексту його потрібно представити чисельно. Простий і часто ефективний підхід — модель «мішка слів», при якій кожен документ кодується вектором частот слів. Щоб зменшити вплив дуже частих, але малоінформативних слів, використовують вагу зворотної частоти документа: $idf_{i}=\log\left(\dfrac{N_{documents}}{N_{documents\text{-}with\text{-}word\_i}}\right)$. Поєднання частоти терміна та зворотної частоти документа дає відому міру TF–IDF: $tfidf_{i,j}=tf_{i,j}\times idf_{i}$, яка підсилює рідкісні й інформативні слова й послаблює надто загальні.
+
+Генерація wordcloud (приклад збору тексту зі сторінки та візуалізації):
+```python
+from wordcloud import WordCloud
+from bs4 import BeautifulSoup
+import requests
+import re
+
+response = requests.get("https://mathmod.chnu.edu.ua/")
+root = BeautifulSoup(response.content, "lxml")
+wc = WordCloud(width=800, height=400).generate(re.sub(r"\s+", " ", root.text))
+wc.to_image()
+```
+
+![ml](./img/106-1.png)
+
+
+TF (bag-of-words) — приклад побудови словника та матриці частот:
+```python
+documents = [
+        "In Inception, the plot unfolds with thrilling action, keeping audiences on edge through a series of intense and unexpected twists.",
+        "The story of Inception keeps audiences hooked with its thrilling action and surprising twists, making every moment unforgettable.",
+        "The Matrix transformation preserves the vector's direction, illustrating how linear combinations affect the overall system."
+]
+
+document_words = [doc.lower().split() for doc in documents]
+vocab = sorted(set(sum(document_words, [])))
+vocab_dict = {k: i for i, k in enumerate(vocab)}
+
+import numpy as np
+X_tf = np.zeros((len(documents), len(vocab)), dtype=int)
+for i, doc in enumerate(document_words):
+        for word in doc:
+                X_tf[i, vocab_dict[word]] += 1
+
+print(X_tf)
+```
+
+Косинусна подібність — простий спосіб виміряти схожість між двома векторними представленнями тексту: $CosineSim(x,y)=\dfrac{x\cdot y}{\|x\|_{2}\|y\|_{2}}$. Вона добре працює для порівняння документів у просторі TF–IDF, але має й обмеження: в такому підході немає розуміння семантики слів, і різні слова, які мають близьке значення, залишаються віддаленими в просторі one‑hot або частотних векторів.
+
+Щоб виправити цю проблему, використовують вбудовування слів (word embeddings) — щільні вектори фіксованого розміру, у яких семантично близькі слова займають близькі позиції у просторі. Моделі на кшталт word2vec або переднавчені матриці типу GloVe навчають векторні представлення таким чином, що арифметичні операції над векторами можуть відображати мовні відношення: наприклад, операція \(\text{king} - \text{man} + \text{woman}\) зазвичай наближається до вектора, близького до \(\text{queen}\). Це відкриває шлях до більш змістовних порівнянь і до знаходження синонімів, антонімів і тематичних зв'язків.
+
+IDF, TF–IDF та косинусна подібність:
+```python
+idf = np.log(X_tf.shape[0] / X_tf.astype(bool).sum(axis=0))
+X_tfidf = X_tf * idf
+X_tfidf_norm = X_tfidf / np.linalg.norm(X_tfidf, axis=1)[:, None]
+M = X_tfidf_norm @ X_tfidf_norm.T
+print('IDF:', idf)
+print('TF-IDF matrix:\n', X_tfidf)
+print('Cosine similarity matrix:\n', M)
+```
+
+Word embeddings (GloVe через gensim.downloader) та приклад аналогій:
+```python
+import gensim.downloader as api
+word_vectors = api.load("glove-wiki-gigaword-100")
+vector = word_vectors['computer']
+print('vector sample:', vector[:10])
+print('similarity woman/man:', word_vectors.similarity('woman', 'man'))
+
+king = word_vectors['king']
+man = word_vectors['man']
+woman = word_vectors['woman']
+result_vector = king - man + woman
+print('Analogy results:')
+for word, similarity in word_vectors.similar_by_vector(result_vector, topn=5):
+        print(word, similarity)
+```
+
+TF–IDF і схожість у Gensim (корпус, словник, модель TFIDF, MatrixSimilarity):
+```python
+import gensim as gs
+from gensim.test.utils import lee_corpus_list
+from gensim.models import Word2Vec
+
+documents = [
+        "kyiv has some excellent new restaurants",
+        "kharkiv is a city with great cuisine",
+        "postgresql is a relational database management system"
+]
+document_words = [doc.split() for doc in documents]
+dictionary = gs.corpora.Dictionary(document_words)
+corpus = [dictionary.doc2bow(doc) for doc in document_words]
+tfidf = gs.models.TfidfModel(corpus)
+X_tfidf = gs.matutils.corpus2csc(tfidf[corpus])
+print(X_tfidf.todense().T)
+
+M = gs.similarities.MatrixSimilarity(tfidf[corpus])
+print(M.get_similarities(tfidf[corpus]))
+```
+
+Далі стоять мовні моделі, які намагаються оцінити ймовірність слова, враховуючи контекст: $P(word_{i}\mid word_{1},\dots,word_{i-1})$. Простий, але корисний клас таких моделей — n‑грами, що враховують обмежений контекст попередніх $n-1$ слів; їх можна вважати аппроксимацією повної ймовірнісної моделі мови. Сучасні нейронні та трансформерні моделі значно перевершують n‑грами за здатністю захоплювати довготривалі залежності та контекст.
+
+У практиці науковця з даних частина роботи полягає в доборі правильного представлення залежно від задачі: для швидкої класифікації рецензій часто достатньо TF–IDF і лінійних моделей; для складних завдань семантичного пошуку або витягнення сутностей корисні вбудовування слів і контекстні мовні моделі. Важливо пам'ятати, що підготовка даних і прості методи іноді дають вражаючі результати, і вибір інструменту має базуватись на доступності даних, вимогах до точності й обмеженнях по часу на навчання.
+
 ## 7. Теорія ймовірності
 
 
@@ -490,9 +699,299 @@ plt.scatter(x,y,c=z)
 
 ## 8. Вступ в машинне навчання
 
+Машинне навчання є на даний момент швидкозростаючою галуззю, хоча слід підкреслити, що початкові методи, які ми тут розглянемо (а саме лінійна регресія), з'явилися приблизно на 200 років раніше, ніж сам термін (зазвичай вважається, що Гаусс розробив метод найменших квадратів близько 1800 року). Більшість пізніших методів, про які ми говоримо, були добре вивчені в статистиці на початку століття. Ми все одно будемо використовувати загальний термін «машинне навчання» для позначення всіх цих методів, але важливо знати, що ці ідеї не виникли в спільноті ML. Натомість тема машинного навчання розвинулася завдяки поєднанню трьох різних елементів: 
+- зростання обчислювальної потужності (машинне навчання, яке виникло з інформатики, завжди було фундаментально пов'язане з обчислювальними алгоритмами), 
+- величезні обсяги доступних даних (сировина для методів машинного навчання) та 
+- деякі значні досягнення в галузі алгоритмів, що відбулися за останні 30 років. Однак для початку ми розглянемо деякі з найпростіших алгоритмів, щоб систематизувати основні принципи.
+
+```
+import matplotlib.pyplot as plt
+import pandas as pd
+
+def build_plot(file_path, x, y):
+    data = pd.read_csv(file_path)
+    plt.scatter(data[x], data[y], c='blue', marker='x')
+    plt.xlabel(x)
+    plt.ylabel(y)
+    return plt
+
+build_plot('../resources/Salary_dataset.csv', 'YearsExperience', 'Salary').show()
+```
+
+![ml](./img/201-1.png)
+
+Ось простий приклад залежності між стажем роботи співробітників та їхньою заробітною платою. Чи можна передбачити другий параметр на основі значення першого?
+
+Можна припустити, що залежність відповідає лінійній моделі.
+
+$$y \approx \theta_1 \cdot x + \theta_2$$
+
+
+Тут 
+- $\theta_1$ це “нахил” лінії, та (slope)
+- $\theta_2$ зсув. (intercept)
+
+Чи можемо ми робити передбачення даних?
+
+```
+import numpy as np
+
+def build_line(plt, theta):
+    xlim, ylim =(plt.gca().get_xlim(), plt.gca().get_ylim())
+    plt.plot(xlim, [theta[0]*xlim[0]+theta[1], theta[0]*xlim[1]+theta[1]], 'C1')
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+
+plt = build_plot('../resources/Salary_dataset.csv', 'YearsExperience', 'Salary')
+build_line(plt, np.array([9000, 25000]))
+```
+
+![ml](./img/201-2.png)
+
+
+**Градієнтний спуск (Gradient descent)**
+
+Припустимо, що прогнозована зарплата відповідає лінійній моделі. Як ми можемо знайти $\theta$? 
+
+Є багато можливостей, але природною метою є мінімізація деякої різниці між цією лінією 
+і спостережуваними даними, наприклад, квадратична втрата:
+
+$$E(\theta) = \sum_{i}(\theta_{1}*x_{i} + \theta_{2} - y_{i} )^{2}$$
+
+Тепер нам потрібно знайти параметри, які мінімізують значення функції $E(\theta)$.
+
+$$minimize_{\theta}E(\theta)$$
+
+Найкращий спосіб знайти значення функції $f(x)$, в якій її значення є мінімальним, — це знайти похідну. Ми починаємо з деякої точки і змінюємо вхідне значення в напрямку від'ємної похідної. У випадку багатозмінних функцій ми будемо використовувати часткові похідні.
+
+Щоб знайти хороше значення $\theta$, ми можемо повторно робити кроки в напрямку 
+негативних похідних для кожного значення. Ітерація:
+
+$$ \theta_{1} := \theta_{1} - \alpha \frac{\delta}{\delta \theta_{1}} E(\theta_{1}, \theta_{2})$$
+
+$$ \theta_{2} := \theta_{2} - \alpha \frac{\delta}{\delta \theta_{2}} E(\theta_{1}, \theta_{2})$$
+
+де $\alpha$ — це невелике додатне число, яке називається розміром кроку.
+Це алгоритм градієнтного спуску, основа сучасного машинного навчання.
+
+Тут: 
+
+$$\frac{\delta}{\delta \theta_{1}} E(\theta_{1}, \theta_{2}) = \sum_{i}2(\theta_{1}*x_{i} + \theta_{2} - y_{i} )*x_{i}$$
+
+$$\frac{\delta}{\delta \theta_{2}} E(\theta_{1}, \theta_{2}) = \sum_{i}2(\theta_{1}*x_{i} + \theta_{2} - y_{i} )$$
+
+Застосуємо градієнтний спуск до наших даних, спочатку нормалізувавши їх.
+
+```
+def build_plot_normalized(file_path, x, y):
+    data = pd.read_csv(file_path)
+    x_nor = (data[x] - min(data[x])) / (max(data[x]) - min(data[x]))
+    y_nor = (data[y] - min(data[y])) / (max(data[y]) - min(data[y]))
+    plt.scatter(x_nor, y_nor, c='blue', marker='x')
+    plt.xlabel(x)
+    plt.ylabel(y)
+    return plt
+
+build_plot_normalized('../resources/Salary_dataset.csv', 'YearsExperience', 'Salary').show()
+```
+
+Візуалізуємо процес градієнтного спуску.
+
+```
+# Visualizing the gradient descent:
+
+def get_data(file_path, x_name, y_name):
+    data = pd.read_csv(file_path)
+    return data[x_name], data[y_name]
+
+def normalize_data(x):
+    x_normalized = (x - min(x)) / (max(x) - min(x))
+    return x_normalized
+
+def gradient_descent(x, y, iters, alpha):
+    theta = np.array([0., 0.])
+    for t in range(iters):
+        theta[0] -= alpha/len(x) * 2 * sum((theta[0] * x + theta[1] - y)*x)
+        theta[1] -= alpha/len(x) * 2 * sum((theta[0] * x + theta[1] - y) )
+    return theta 
+
+def plot_fit(x, y, theta):
+    plt.scatter(x, y, marker = 'x')
+    xlim, ylim =(plt.gca().get_xlim(), plt.gca().get_ylim())
+    plt.plot(xlim, [theta[0]*xlim[0]+theta[1], theta[0]*xlim[1]+theta[1]], 'C1')
+    plt.xlim(xlim)
+    plt.ylim(ylim) 
+
+x, y = get_data('../resources/Salary_dataset.csv', 'YearsExperience', 'Salary')
+x_normalized, y_normalized = normalize_data(x), normalize_data(y)
+
+#first iteration
+theta = gradient_descent(x_normalized, y_normalized, 0, 0.1)
+plot_fit(x_normalized, y_normalized, theta)
+```
+
+![ml](./img/201-3.png)
+
+Як бачимо, на першій ітерації значення параметрів $\theta$ віддалені від бажаних. Проведемо іще декілька ітерацій.
+
+
+```
+theta = gradient_descent(x_normalized, y_normalized, 2, 0.1) # change third parameter to see more iterations
+plot_fit(x_normalized, y_normalized, theta)
+```
+
+![ml](./img/201-4.png)
+
+```
+theta = gradient_descent(x_normalized, y_normalized, 5, 0.1) # change third parameter to see more iterations
+plot_fit(x_normalized, y_normalized, theta)
+```
+
+![ml](./img/201-5.png)
+
+```
+theta = gradient_descent(x_normalized, y_normalized, 10, 0.1) # change third parameter to see more iterations
+plot_fit(x_normalized, y_normalized, theta)
+```
+
+![ml](./img/201-6.png)
+
+```
+theta = gradient_descent(x_normalized, y_normalized, 100, 0.1) # change third parameter to see more iterations
+plot_fit(x_normalized, y_normalized, theta)
+```
+
+![ml](./img/201-7.png)
+
+Після 100-ї ітерації ми наблизилися із нашою лінійною моделлю до реального розподілу. 
+
+Ми також можемо візуалізувати процес зміни параметрів $\theta$:
+
+```
+# Visualizing parameter updates
+
+def gradient_descent_params(x, y, iters):
+    thetas = []
+    theta = np.array([0., 0.])
+    alpha = 1.0
+    for t in range(iters):
+        thetas.append(theta.copy())
+        theta[0] -= alpha/len(x) * 2 * sum((theta[0] * x + theta[1] - y)*x)
+        theta[1] -= alpha/len(x) * 2 * sum((theta[0] * x + theta[1] - y) )
+    return np.array(thetas)
+
+def err(x, y, theta):
+    return np.mean((np.outer(x, theta[:,0]) + theta[:,1] - y[:,None])**2,axis=0)
+
+thetas = gradient_descent_params(x_normalized, y_normalized, 100)
+plt.plot(thetas[:,0], thetas[:,1])
+xlim, ylim =(np.array(plt.gca().get_xlim()), np.array(plt.gca().get_ylim()))
+xlim += np.array([0,0.5])
+ylim += np.array([-0.1, 0.1])
+
+XX,YY = np.meshgrid(np.linspace(xlim[0],xlim[1],200), np.linspace(ylim[0], ylim[1],200))
+ZZ = err(x_normalized.to_numpy(), y_normalized.to_numpy(), np.hstack([np.ravel(XX)[:,None], np.ravel(YY)[:,None]])).reshape(XX.shape)
+#V = np.logspace(np.log(np.min(ZZ)), np.log(np.max(ZZ)), 30)
+V = np.linspace(np.sqrt(np.min(ZZ)), np.sqrt(np.max(ZZ)), 25)**2
+plt.clf()
+plt.contour(XX,YY,ZZ, V, colors=('C0',))
+plt.plot(thetas[:,0], thetas[:,1], 'C1-x')
+plt.xlabel("theta1")
+plt.ylabel("theta2")
+```
+
+![ml](./img/201-8.png)
+
+Зробимо те саме лінійне прогнозування, використовуючи бібліотеку scikit-learn:
+
+```
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+data = pd.read_csv('../resources/Salary_dataset.csv')
+X = np.array(data['YearsExperience']).reshape(-1, 1)  
+y = np.array(data['Salary'])                
+
+# етап тренування моделі
+model = LinearRegression()
+model.fit(X, y)
+
+# отримуємо параметри theta
+slope = model.coef_[0]       # theta_1
+intercept = model.intercept_ # theta_2 
+print("slope:", slope, "intercept:", intercept)
+
+# будуємо лінію 
+X_line = np.linspace(X.min(), X.max(), 100).reshape(-1, 1)
+y_line = model.predict(X_line)
+
+# plot 
+plt.scatter(X, y, c='blue', marker='x')          # початкові дані
+plt.plot(X_line, y_line)   # лінія
+plt.xlabel("X")
+plt.ylabel("y")
+plt.title("Linear Regression Fit")
+plt.show()
+```
+
+![ml](./img/201-9.png)
+
+
+**Трохи більше про машинне навчання.**
+
+Машинне навчання надає можливість автоматично встановлювати прогнозну модель на основі даних.
+
+*Термінологія*. Функція втрат: $l: y × y \rightarrow \mathbb{R}$, вимірює різницю між прогнозом і 
+фактичним результатом $$l(y',y)=(y'-y)^{2}$$
+
+Канонічна задача оптимізації машинного навчання:
+
+$$minimize_{\theta}\sum_{i}l(h_{\theta}(x^{i}), y^{i})$$
+
+Практично кожен алгоритм машинного навчання має таку форму, просто вкажіть
+- Що таке функція гіпотези?
+- Що таке функція втрат?
+- Як вирішити задачу оптимізації?
+
+*Приклади алгоритмів машинного навчання*
+
+- Найменші квадрати: лінійна гіпотеза, квадратична втрата, (зазвичай) аналітичне 
+рішення.
+- Лінійна регресія: лінійна гіпотеза.
+- Машина опорних векторів (support vector machine): {лінійна або ядрова гіпотеза, втрата шарніра, *}
+- Нейронна мережа: {складена нелінійна функція, *, (зазвичай) градієнтний 
+спуск)
+- Дерево рішень (decision trees): {ієрархічні півплощини, вирівняні по осі, *, жадібна оптимізація}
+- Наївний Байєс: {лінійна гіпотеза, спільна ймовірність за певних 
+припущень незалежності, аналітичне рішення}
+
+
+
+
+
 ## 9. Лінійна Класифікація
 
+
+
+```
+
+```
+
+```
+
+```
+
 ## 10. Нелінійні Алгоритми Машинного Навчання
+
+
+```
+
+```
+
+```
+
+```
 
 ## 11. Ансамблеве навчання
 
