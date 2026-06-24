@@ -2815,12 +2815,646 @@ Expected Frequencies:
 
 ## 14. Рекомендаційні системи (Recommender Systems)
 
+**Колаборативна фільтрація (collaborative filtering)**
+
+Колаборативна фільтрація (CF) — це підхід у системах рекомендацій, який прогнозує,
+які об’єкти (товари, фільми, книги тощо) можуть сподобатися користувачу,
+виходячи з подібності між користувачами або між самими об’єктами.
+
+*Підходи «користувач – користувач»*: знайти користувачів, які найбільш схожі на мене (на основі 
+тільки тих елементів, які оцінені для нас обох), і передбачити оцінки для інших 
+елементів на основі середнього значення 
+
+*Підходи «елемент – елемент»*: знайти елементи, найбільш схожі на даний елемент (на основі 
+всіх користувачів, які оцінили обидва елементи), і передбачити оцінки для інших користувачів на основі 
+середнього значення
+
+*Підходи матричної факторизації*: знайти деяку низькорангову декомпозицію матриці $X$,
+ яка узгоджується з спостережуваними значеннями
 
 
+Маємо:
+
+- множину користувачів $ U = {u_1, u_2, \ldots, u_m} $,
+- множину об’єктів $I = {i_1, i_2, \ldots, i_n} $.
+
+Створюється матриця оцінок:
+
+$$
+R = [r_{ui}]_{m \times n}
+$$
+
+де:
+
+- $r_{ui}$ — рейтинг, який користувач $ u $ поставив об’єкту $ i $,
+- якщо користувач не оцінив об’єкт — $ r_{ui} $ відсутній (невідомий).
+
+
+Передбачити невідомий рейтинг:
+$$
+\hat{r_{ui}} \approx r_{ui}
+$$
+
+для пари *(користувач, об’єкт)*, якої ще немає у матриці.
+
+**User-based Collaborative Filtering (на основі подібності користувачів)**
+
+Ідея:
+Шукаємо користувачів, схожих на користувача $u $, і прогнозуємо його рейтинг
+на основі оцінок цих схожих користувачів.
+
+*Кроки*:
+
+1. Обчислити схожість між користувачами, наприклад, за допомогою косинусної подібності:
+   $$
+   \text{sim}(u, v) = \frac{\sum_{i \in I_{uv}} r_{ui} r_{vi}}{\sqrt{\sum_{i \in I_{uv}} r_{ui}^2} \sqrt{\sum_{i \in I_{uv}} r_{vi}^2}}
+   $$
+   де $ I_{uv} $ — множина об’єктів, які оцінили обидва користувачі.
+
+2. Прогноз рейтингу:
+   $$
+   \hat{r_{ui}} = \bar{r_u} + \frac{\sum_{v \in N(u)} \text{sim}(u, v) (r_{vi} - \bar{r}_v)}{\sum_{v \in N(u)} |\text{sim}(u, v)|}
+   $$
+   де:
+
+   - $ N(u) $ — набір найбільш схожих користувачів (сусідів),
+   - $\bar{r}_u $ — середній рейтинг користувача $u$.
+
+
+
+Окремо можна винести: *Кореляцію Пірсона*:
+  $$
+  \text{sim}(x, y) = \frac{\sum_i (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_i (x_i - \bar{x})^2} \sqrt{\sum_i (y_i - \bar{y})^2}}
+  $$
+
+
+| Користувач / Фільм 🎬 | Фільм A | Фільм B | Фільм C | Фільм D |
+| :-------------------: | :-----: | :-----: | :-----: | :-----: |
+|       👤 **U1**       |    5    |    4    |    ?    |    2    |
+|       👤 **U2**       |    3    |    ?    |    4    |    1    |
+|       👤 **U3**       |    ?    |    2    |    5    |    4    |
+|       👤 **U4**       |    4    |    3    |    ?    |    ?    |
+
+
+```python
+import numpy as np
+import pandas as pd
+
+# Приклад user-item матриці з рейтингами
+ratings_matrix = np.array([
+    [5, 3, 0, 1],
+    [4, 0, 0, 1],
+    [1, 1, 0, 5],
+    [1, 0, 0, 4],
+    [0, 1, 5, 4],
+])
+
+# Перетворюємо матрицю в датафрейм 
+ratings_df = pd.DataFrame(ratings_matrix, columns=["Item1", "Item2", "Item3", "Item4"])
+
+user_similarity = ratings_df.T.corr(method='pearson')
+
+print("User-User Pearson Correlation Matrix:\n", user_similarity)
+```
+
+```
+User-User Pearson Correlation Matrix:
+           0         1         2         3         4
+0  1.000000  0.774291 -0.186441 -0.178683 -0.978839
+1  0.774291  1.000000  0.019854  0.162791 -0.628768
+2 -0.186441  0.019854  1.000000  0.972828  0.221028
+3 -0.178683  0.162791  0.972828  1.000000  0.258904
+4 -0.978839 -0.628768  0.221028  0.258904  1.000000
+```
+
+Передбачимо рейтинг користувача.
+
+```python
+# Функція для передбачення рейтингу користувача за айтем 
+def predict_rating(user_index, item_index, ratings_df, similarity_matrix):
+    user_means = ratings_df.replace(0, np.nan).mean(axis=1).values
+
+    # Отримуємо рейтинг за айтем від усіх інших користувачів
+    item_ratings = ratings_df.iloc[:, item_index]
+    
+    # Отримуємо подібність користувача з іншими користувачами
+    user_similarities = similarity_matrix[user_index]
+    
+    # Фільтруємо користувачів за тими, хто надав рейтинг цьому айтему і вилучаємо самоподібність
+    non_zero_indices = item_ratings[item_ratings > 0].index
+    similarities = user_similarities[non_zero_indices]
+    ratings = item_ratings[non_zero_indices]
+    means = user_means[non_zero_indices]
+    
+    # Якщо жоден інший користувач надав рейтинг цьому айтему, ставимо 0
+    if len(similarities) == 0:
+        return 0
+    
+    # Зважена сума рейтингів, нормалізована за подібностями користувачів.
+    
+    ratings_weighted = ratings - means
+    weighted_sum = np.dot(similarities, ratings_weighted)
+    
+    sum_of_similarities = np.sum(np.abs(similarities))
+
+    predicted = weighted_sum / sum_of_similarities if sum_of_similarities != 0 else 0
+
+    return ratings.mean() + predicted
+
+print(predict_rating(4, 0, ratings_df, user_similarity))
+```
+
+```
+1.0331985858244794
+```
 
 ## 15. Часові Ряди
 
+Часовий ряд дає можливість передбачити значення наступної (майбутньої) точки (змінної), наприклад, передбачити ціну акції через годину, день, тиждень, базуючись на розмірності даних.
+
+Ряд складається з двох частин - сигналу та шуму. Сигнал - це математично залежні змінні, які можна проаналізувати та прибрати з часового ряду. Шум навпаки складається з рандомних значень, частіше за все нормального розподілу, та візуально схожий на звуковий шум.
+
+Патерни сигналу:
+- Сезонність (seasonality) - циклічні коливання змінної в залежності від часу. Наприклад, зниження температури взимку. 
+- Тренд (trend/level) - це наклон ряду до горизонтальної осі. Тренд може бути зростаючим або  спадаючим, якщо тренд не змінюється, то часовий ряд розташований горизонтально.
+- Автокореляція - це “пам’ять” ряду, значення змінної в конкретний час напряму залежить від попередніх значень змінної.
+
+Якщо ряд не містить патерни, його називають стаціонарним. Стаціонарним (Stationary) є ряд без тренду та сезонності, середнє та стандартне відхилення якого є константами. Окремим патерном є часові ряди, які не можна зробити стаціонарними, прибравши тренд та/або сезонність. Такі ряди називають difference - stationary. 
+
+![timeseries](../resources/ts-1.webp)
+
+
+```python
+import pandas as pd
+
+data = pd.read_csv('../resources/sales.csv')
+display(data.head(10))
+
+# data = data.drop('Unnamed: 0', axis=1)
+data.hist()
+```
+
+```
+
+Unnamed: 0	Date	Sales
+0	0	2021-10-01	29.109547
+1	1	2021-10-02	30.720435
+2	2	2021-10-03	30.305173
+3	3	2021-10-04	27.390893
+4	4	2021-10-05	22.841123
+5	5	2021-10-06	19.002444
+6	6	2021-10-07	23.904594
+7	7	2021-10-08	27.544137
+8	8	2021-10-09	30.567059
+9	9	2021-10-10	30.087033
+```
+
+![ml](./img/208-1.png)
+
+
+Зобразимо даний часовий ряд:
+
+```python
+data.plot(x='Date', y='Sales', kind='line', title='Daily Sales Over Time', figsize=(14, 5))
+```
+
+![ml](./img/208-2.png)
+
+
+
+```python
+# data has no missing values
+print(data.describe())
+print("NAN values:",data.isna().sum())
+```
+
+
+```
+            Sales
+count  365.000000
+mean    34.093942
+std      6.572683
+min     19.002444
+25%     29.290376
+50%     33.971567
+75%     38.647294
+max     48.190967
+NAN values: Date     0
+Sales    0
+dtype: int64
+```
+
+На графіку вище чітко видно сезонну закономірність, яка повторюється тиждня, та висхідний тренд. Давайте детальніше розглянемо тренд та сезонну закономірність:
+
+*Шум (resid)* - це часовий ряд після прибирання з нього тренду та сезонності.
+
+
+```python
+data['Date'] = pd.to_datetime(data['Date'])
+data = data.set_index('Date')
+data = data.asfreq('D')
+
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+decomposed = seasonal_decompose(data['Sales']) 
+decomposed.plot()
+```
+
+![ml](./img/208-3.png)
+
+**Доповнений тест Дікі - Фуллера (ADF)**
+
+Тест ADF - це тест для перевірки стаціонарності часового ряду на основі unit root - це процес, який через диференціювання визначає чи є часовий ряд стаціонарним. Тест працює за принципом приймання або відкидання нульової гіпотези, яка полягає у тому, що ряд не є стаціонарним. Приймати чи відкидати нульову гіпотезу вирішується за значенням p (вірогідність неправильності нульової гіпотези): якщо значення є більшим за визначену константу, то нульова гіпотеза приймається (ряд не є стаціонарним), якщо меншим - гіпотеза відкидається (ряд є стаціонарним). Традиційно, константа = 0.05 (5%), але може бути іншою, в залежності від даних та моделі.  Також важливо дивитися і на значення статистики, якщо воно більше за будь-яке критичне значення, то часовий ряд не є стаціонарним.
+
+```python
+from statsmodels.tsa.stattools import adfuller
+import matplotlib.pyplot as plt
+
+# data = data.drop('Unnamed: 0', axis=1)
+
+def adfuller_test(df):
+    adf=adfuller(df)
+    statistic= adf[0]
+    p_value=adf[1]
+    critical_values=adf[4]
+    return p_value,statistic,critical_values
+
+def stat_check(df,p_value_check=0.05):
+    movingAverage = df.rolling(window=12).mean()
+    movingSTD = df.rolling(window=12).std()
+    orig = plt.plot(df, color='blue', label='Original')
+    mean = plt.plot(movingAverage, color='red', label='Rolling Mean')
+    std = plt.plot(movingSTD, color='black', label='Rolling Std')
+    plt.legend(loc='best')
+    plt.title('Rolling Mean & Standard Deviation')
+    plt.show(block=False)
+    
+    p_value,statistic,critical_values=adfuller_test(df)
+    if (p_value<p_value_check):
+        print('Time series is stationary, p value:{}'.format(p_value))
+    else:
+        print('Time series is NOT stationary, p value:{}'.format(p_value))
+    print('Statistic:{}'.format(statistic))
+    for key, value in critical_values.items():
+        print('Critial Values:')
+        print(f'   {key}, {value}')
+
+stat_check(data)
+```
+
+![ml](./img/208-4.png)
+
+```
+Time series is NOT stationary, p value:0.979126294138459
+Statistic:0.34045531718527483
+Critial Values:
+   1%, -3.4492815848836296
+Critial Values:
+   5%, -2.8698813715275406
+Critial Values:
+   10%, -2.5712138845950587
+```
+
+**Автокореляція**
+
+Кореляція - це зв’язок змінних між собою, автокореляція - зв’язок змінної з власними попередніми значенням. Оскільки ряд має тільки одну змінну, аналізувати потрібно тільки автокореляцію. Перед тим, як графік автокореляції розкриється у всій красі, розкажу про поняття lags (лаги) - це значення змінної n - кількість часу назад, оскільки розмірністю нашого часового ряду є день, то lag -1 означає значення 1 днів тому для поточної змінної, -2 -  два дні тому, тощо. На наведеному нижче графіку кількість лагів дорівнює 10.
+
+```python
+from statsmodels.graphics.tsaplots import plot_acf
+
+plot_acf(data,lags=10)
+plt.show()
+```
+
+![ml](./img/208-5.png)
+
+Декомпозиція - це процес перетворення нестаціонарного часового ряду у стаціонарний шляхом прибирання з нього сезонності та тренду.
+
+Реконструкція часового ряду - це процес зворотнього додавання до ряду тренду та сезонності, якщо цього не зробити, ряд буде паралельним осі х та буде мало корисним як прогнозування.
+
+
+**Функції втрати**
+
+Показниками якості моделей та прогнозування для часових рядів є функції втрати та метрики похибки. Найчастіше використовують такі функції втрати як MAE (L1 norm) - “Mean Square Error”, MSE(L2 norm) - “Mean Absolute Error”. 
+
+MAE надає кожній помилці однакову “вагу”, тобто є робастною до викидів та шуму функцією, але одночасно з цим занижує “вплив” великих помилок.
+
+MSE в свою чергу навпаки, дає більшим помилкам більшу вагу, що робить функцію більш чутливою до викидів. Якщо модель повинна бути чутлива до помилок, обирають саме цю функцію. 
+
+
+```python
+import numpy as np
+
+def calculate_mape(actual, predicted): 
+  
+    if([isinstance(actual, np.ndarray) or isinstance(predicted, np.ndarray)]): 
+        actual, predicted = np.array(actual),  np.array(predicted) 
+    else:
+        actual, predicted = np.Int(actual),  np.Int(predicted)
+        
+    return round(np.mean(np.abs(( 
+      actual - predicted) / actual)) * 100, 2) 
+```
+
+
+**ARIMA** (AutoRegressive Integrated Moving Average) — один із найпопулярніших методів класичного прогнозування часових рядів.
+Його використовують, коли дані мають автокореляцію, тренд, але не обов’язково мають сезонність.
+
+ARIMA дозволяє моделювати складні часові залежності й робити прогноз на майбутні значення.
+
+Модель ARIMA описується трійкою параметрів:
+
+$$ARIMA(p, d, q)$$
+
+де
+
+- p – кількість авторегресивних лагів (AR)
+- d – порядок диференціювання (I, Integrated), щоб зробити ряд стаціонарним
+- q – порядок ковзного середнього (MA)
+
+Поточне значення залежить від попередніх:
+
+$$ y_t = \phi_1 y_{t-1} + \phi_2 y_{t-2} + \cdots + \phi_p y_{t-p} + \varepsilon_t $$
+
+Авторегресійна частина (AR(p)) - поточне значення залежить від попередніх.
+
+Інтегрована частина (I(d)) - диференціювання робить ряд стаціонарним:
+
+$$ y^{d}_t = y_t - y_{t-1} $$
+
+або для d>1 – повторюється кілька разів. Стаціонарність важлива, бо AR і MA працюють саме з нею.
+
+Ковзне середнє (MA(q))
+
+$$ y_t = \theta_1 \varepsilon_{t-1} + \theta_2 \varepsilon_{t-2} + \cdots + \theta_q \varepsilon_{t-q} + \varepsilon_t $$
+
+Це модель залежності від попередніх випадкових шоків (помилок).
+
+Повна модель ARIMA - поєднання всіх частин:
+
+$$ ARIMA(p,d,q) = AR(p) + I(d) + MA(q) $$
+
+Після диференціювання:
+
+$$
+y'_t = \phi_1 y'_{t-1} + ... + \phi_p y'_{t-p} +
+\theta_1 \varepsilon_{t-1} + ... + \theta_q \varepsilon_{t-q} + \varepsilon_t
+$$
+
+Починаємо із $y'_{0} = y_{0}$
+
+
+```python
+from statsmodels.tsa.arima.model import ARIMA
+
+model = ARIMA(data['Sales'], order=(7,1,7))
+model_fit = model.fit()
+
+print(model_fit.summary())
+forecast = model_fit.forecast(steps=30)
+
+print("Forecasted values:")
+print(forecast)
+
+plt.figure(figsize=(14, 5))
+plt.plot(data['Sales'], label="Original Series")
+plt.plot(forecast.index, forecast, label="Forecast", linestyle='--')
+plt.legend()
+plt.title("ARIMA Forecast Example")
+plt.show()
+```
+
+```
+                               SARIMAX Results                                
+==============================================================================
+Dep. Variable:                  Sales   No. Observations:                  365
+Model:                 ARIMA(7, 1, 7)   Log Likelihood                -536.758
+Date:                Fri, 21 Nov 2025   AIC                           1103.517
+Time:                        12:02:09   BIC                           1161.974
+Sample:                    10-01-2021   HQIC                          1126.751
+                         - 09-30-2022                                         
+Covariance Type:                  opg                                         
+==============================================================================
+                 coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------
+ar.L1         -1.5086      1.264     -1.193      0.233      -3.986       0.969
+ar.L2         -1.0640      0.866     -1.228      0.219      -2.762       0.634
+ar.L3         -0.8506      0.554     -1.536      0.124      -1.936       0.235
+ar.L4         -1.3599      0.572     -2.376      0.018      -2.482      -0.238
+ar.L5         -1.4469      1.224     -1.182      0.237      -3.846       0.952
+ar.L6         -0.7478      0.760     -0.984      0.325      -2.238       0.742
+ar.L7         -0.1451      0.231     -0.629      0.529      -0.597       0.307
+ma.L1          0.5698      1.260      0.452      0.651      -1.900       3.039
+ma.L2         -0.2415      0.583     -0.414      0.679      -1.385       0.902
+ma.L3          0.0016      0.369      0.004      0.997      -0.721       0.724
+ma.L4          0.6490      0.221      2.934      0.003       0.216       1.083
+ma.L5          0.3343      0.746      0.448      0.654      -1.129       1.797
+ma.L6         -0.4259      0.335     -1.270      0.204      -1.083       0.232
+ma.L7         -0.3330      0.435     -0.765      0.444      -1.186       0.520
+sigma2         1.1157      0.091     12.310      0.000       0.938       1.293
+===================================================================================
+Ljung-Box (L1) (Q):                   0.00   Jarque-Bera (JB):                 0.39
+Prob(Q):                              0.95   Prob(JB):                         0.82
+Heteroskedasticity (H):               0.92   Skew:                             0.08
+Prob(H) (two-sided):                  0.67   Kurtosis:                         3.02
+===================================================================================
+
+Warnings:
+[1] Covariance matrix calculated using the outer product of gradients (complex-step).
+Forecasted values:
+2022-10-01    48.616060
+2022-10-02    47.693508
+2022-10-03    43.710640
+2022-10-04    39.170891
+2022-10-05    37.856026
+2022-10-06    40.696951
+2022-10-07    45.373877
+2022-10-08    48.592830
+2022-10-09    47.813319
+2022-10-10    43.598087
+2022-10-11    39.219554
+2022-10-12    37.894455
+2022-10-13    40.630354
+2022-10-14    45.411763
+2022-10-15    48.584311
+2022-10-16    47.786612
+2022-10-17    43.630119
+2022-10-18    39.215936
+2022-10-19    37.889536
+2022-10-20    40.644359
+2022-10-21    45.394903
+2022-10-22    48.578806
+2022-10-23    47.792791
+2022-10-24    43.627127
+2022-10-25    39.225426
+2022-10-26    37.895271
+2022-10-27    40.638293
+2022-10-28    45.391572
+2022-10-29    48.573010
+2022-10-30    47.790048
+Freq: D, Name: predicted_mean, dtype: float64
+```
+
+![ml](./img/208-6.png)
+
+
+**Передбачення із використанням методів машинного навчання.**
+
+$y_{n} (y_{n-1}, y_{n-2}, ..., y_{n-p})$
+
+```python
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+
+def create_lags(series, n_lags=10):
+    df = pd.DataFrame({"y": series})
+    for i in range(1, n_lags + 1):
+        df[f"lag_{i}"] = df["y"].shift(i)
+    return df.dropna()
+
+N_LAGS = 10
+df_lags = create_lags(data['Sales'], N_LAGS)
+
+X = df_lags.drop("y", axis=1)
+y = df_lags["y"]
+
+model = RandomForestRegressor(n_estimators=500, random_state=42)
+model.fit(X, y)
+
+steps = 30
+last_values = list(data['Sales'].values[-N_LAGS:])
+forecast_values = []
+
+for _ in range(steps):
+    x_input = np.array(last_values[-N_LAGS:]).reshape(1, -1)
+    y_pred = model.predict(x_input)[0]
+    
+    forecast_values.append(y_pred)
+    last_values.append(y_pred)
+
+last_date = data.index[-1]
+future_index = pd.date_range(start=last_date, periods=steps+1, freq='D')[1:]
+
+forecast = pd.Series(forecast_values, index=future_index)
+
+print("Forecast:")
+plt.figure(figsize=(14, 5))
+plt.plot(data['Sales'], label="Original Series")
+plt.plot(forecast.index, forecast, label="Random Forest Forecast", linestyle='--')
+plt.legend()
+plt.title("Random Forest Forecast with Lag Features")
+plt.show()
+
+```
+
+![ml](./img/208-7.png)
+
+**Експоненційне зглажування**
+
+Експоненційне згладжування — це клас методів прогнозування часових рядів, у яких останні спостереження отримують більшу вагу, ніж старі.
+Ваги зменшуються експоненційно, звідки й назва.
+
+Нехай $ y_t $ — фактичне значення часового ряду,
+а $ \hat{y}_{t} $ — прогноз.
+
+Тоді *просте експоненційне згладжування (SES)* визначається як:
+
+$$
+\hat{y}_{t} = \alpha y_{t-1} + (1 - \alpha)\hat{y}_{t-1}
+$$
+
+де
+
+- $ 0 < \alpha < 1 $ — коефіцієнт згладжування
+- велике $ \alpha $ - модель сильніше реагує на нові дані
+- мале $ \alpha $ - прогноз згладжений, повільно змінюється
+
+
+*Модель Холта (Holt’s Linear Trend)*: якщо в ряді є тренд, ми додаємо окрему модель для тренду:
+
+$$
+\begin{aligned}
+\hat{y}_{t} &= \ell_{t-1} + b_{t-1} \
+\ell_t &= \alpha y_t + (1-\alpha)(\ell_{t-1} + b_{t-1}) \
+b_t &= \beta (\ell_t - \ell_{t-1}) + (1-\beta) b_{t-1}
+\end{aligned}
+$$
+
+де
+
+- $ \ell_t $ — рівень
+- $ b_t $ — тренд
+- $ \alpha, \beta \in (0,1) $
+
+
+```python
+import matplotlib.pyplot as plt
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+model = ExponentialSmoothing(
+    data['Sales'],
+    trend="add",      
+    seasonal=None     
+)
+
+model_fit = model.fit()
+forecast = model_fit.forecast(30)
+
+print("Forecast:")
+plt.figure(figsize=(10, 5))
+plt.plot(data['Sales'], label="Original Series")
+plt.plot(forecast.index, forecast, label="Exponential Smoothing Forecast", linestyle="--")
+plt.legend()
+plt.title("Exponential Smoothing Forecast Example")
+plt.show()
+```
+
+![ml](./img/208-8.png)
+
+
 ## 16. Моделювання Кризових Явищ
+
+
+
+```
+
+```
+
+```
+
+```
+
+
+```
+
+```
+
+
+```
+
+```
+
 
 ## 17. Використання нейронних мереж для аналізу даних
 
+
+
+
+```
+
+```
+
+```
+
+```
+
+
+```
+
+```
+
+```
+
+```
